@@ -1,0 +1,4 @@
+{
+  "server_addr": "localhost:3200",
+  "certificate": "cert/ca-cert.pem"
+}

@@ -1,0 +1,7 @@
+{
+  "host": "localhost:3200",
+  "dsn": "postgres://user:password@localhost:5432/local?sslmode=disable",
+  "jwt_key": "12345",
+  "certificate": "cert/server-cert.pem",
+  "certificate_key": "cert/server-key.pem"
+}

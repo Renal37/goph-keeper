@@ -1,0 +1,87 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    container: golang:1.22.4
+
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gk
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22.4'
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Set Variables
+      run: |
+        echo "NOW=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_ENV
+        echo "VERSION=$(date +'%Y%m%d')" >> $GITHUB_ENV
+
+    - name: Build agent linux
+      run: |
+          cd cmd/agent
+          go build -ldflags "-X main.buildVersion=$VERSION -X main.buildDate=$NOW" -buildvcs=false -o linux_agent
+    - name: upload linux artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux_agent
+        path: cmd/agent/linux_agent
+
+    - name: Build agent macos
+      run: |
+        cd cmd/agent
+        env GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.buildVersion=$VERSION -X main.buildDate=$NOW" -buildvcs=false -o macos_agent.sh
+        ls -lh
+    - name: upload macos artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos_agent
+        path: cmd/agent/macos_agent.sh
+
+    - name: Build agent windows
+      run: |
+        cd cmd/agent
+        env GOOS=windows GOARCH=amd64 go build -ldflags "-X main.buildVersion=$VERSION -X main.buildDate=$NOW" -buildvcs=false -o windows_agent.exe
+    - name: upload windows artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows_agent
+        path: cmd/agent/windows_agent.exe
+
+    - name: Build server
+      run: |
+          cd cmd/server
+          go build -buildvcs=false -o server
+
+    - name: Run tests
+      run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+    - name: Upload results to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
