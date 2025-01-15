@@ -1,4 +1,3 @@
-// Package middleware provides various middlewares for the server.
 package middleware
 
 import (

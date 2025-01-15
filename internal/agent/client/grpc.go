@@ -15,30 +15,34 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// Максимальный размер сообщения
 var maxMsgSize = 100000648
-var errorResponseFinished = "response finished error: %w"
-var errorEesponseReturn = "response return error: %w"
+// Шаблоны сообщений об ошибках
+var errorResponseFinished = "ошибка завершения ответа: %w"
+var errorEesponseReturn = "ошибка возврата ответа: %w"
 
+// Client представляет GRPC клиент
 type Client struct {
-	Conn  *grpc.ClientConn
-	Token string
+	Conn  *grpc.ClientConn // Соединение GRPC
+	Token string           // Токен авторизации
 }
 
+// NewClient создает новый экземпляр GRPC клиента
 func NewClient(addr string, certPath string, token string) (*Client, error) {
-	// Get TLS cert
+	// Получаем TLS сертификат
 	tlsCredentials, err := loadTLSCredentials(certPath)
 	if err != nil {
-		return nil, fmt.Errorf("cannot load TLS credentials: %w", err)
+		return nil, fmt.Errorf("не удалось загрузить TLS сертификат: %w", err)
 	}
 
-	// Connect to gRPC server
+	// Подключаемся к GRPC серверу
 	conn, err := grpc.Dial(
 		addr,
 		grpc.WithTransportCredentials(tlsCredentials),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed start grpc server: %w", err)
+		return nil, fmt.Errorf("ошибка запуска GRPC сервера: %w", err)
 	}
 
 	return &Client{
@@ -47,17 +51,18 @@ func NewClient(addr string, certPath string, token string) (*Client, error) {
 	}, nil
 }
 
+// Close закрывает соединение с сервером
 func (c Client) Close() error {
 	err := c.Conn.Close()
 	if err != nil {
-		return fmt.Errorf("failed close gRPC client: %w", err)
+		return fmt.Errorf("ошибка закрытия GRPC клиента: %w", err)
 	}
-
 	return nil
 }
 
+// Register регистрирует нового пользователя
 func (c Client) Register(login string, password string) (*proto.RegisterResponse, error) {
-	// Create client
+	// Создаем клиент
 	client := proto.NewUserClient(c.Conn)
 	resp, err := client.Register(context.Background(), &proto.RegiserRequest{
 		Login:    login,
@@ -75,8 +80,9 @@ func (c Client) Register(login string, password string) (*proto.RegisterResponse
 	return resp, nil
 }
 
+// Login выполняет вход пользователя
 func (c Client) Login(login string, password string) (*proto.LoginResponse, error) {
-	// Create client
+	// Создаем клиент
 	client := proto.NewUserClient(c.Conn)
 	resp, err := client.Login(context.Background(), &proto.LoginRequest{
 		Login:    login,
@@ -94,12 +100,13 @@ func (c Client) Login(login string, password string) (*proto.LoginResponse, erro
 	return resp, nil
 }
 
+// ReadAllFile читает все записи
 func (c Client) ReadAllFile() (*proto.ReadAllRecordResponse, error) {
-	// Set authorization in gRPC metadata
+	// Устанавливаем авторизацию в метаданных GRPC
 	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", c.Token))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
-	// Create client
+	// Создаем клиент
 	client := proto.NewStorageClient(c.Conn)
 	resp, err := client.ReadAllRecord(ctx, &proto.ReadAllRecordRequest{})
 
@@ -113,13 +120,13 @@ func (c Client) ReadAllFile() (*proto.ReadAllRecordResponse, error) {
 	return resp, nil
 }
 
-//nolint:dupl // This legal duplicate
+// ReadFile читает одну запись по ID
 func (c Client) ReadFile(id int32) (*proto.ReadRecordResponse, error) {
-	// Set authorization in gRPC metadata
+	// Устанавливаем авторизацию в метаданных GRPC
 	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", c.Token))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
-	// Create client
+	// Создаем клиент
 	client := proto.NewStorageClient(c.Conn)
 	resp, err := client.ReadRecord(ctx, &proto.ReadRecordRequest{
 		Id: id,
@@ -135,12 +142,13 @@ func (c Client) ReadFile(id int32) (*proto.ReadRecordResponse, error) {
 	return resp, nil
 }
 
+// WriteFile записывает данные (текст или файл)
 func (c Client) WriteFile(typ string, name string, data string) (*proto.WriteRecordResponse, error) {
-	// Set authorization in gRPC metadata
+	// Устанавливаем авторизацию в метаданных GRPC
 	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", c.Token))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
-	// Create client
+	// Создаем клиент
 	client := proto.NewStorageClient(c.Conn)
 	stream, err := client.WriteRecord(ctx)
 	if err != nil {
@@ -150,16 +158,16 @@ func (c Client) WriteFile(typ string, name string, data string) (*proto.WriteRec
 	var resp *proto.WriteRecordResponse
 	switch typ {
 	case "text":
-		// Send the gRPC data
+		// Отправляем данные через GRPC
 		err = stream.Send(&proto.WriteRecordRequest{Name: name, Data: []byte(data), Type: "text"})
 		if err != nil {
-			return nil, fmt.Errorf("stream send has error: %w", err)
+			return nil, fmt.Errorf("ошибка отправки потока: %w", err)
 		}
 
-		// Close the stream and get a response
+		// Закрываем поток и получаем ответ
 		resp, err = stream.CloseAndRecv()
 		if err != nil {
-			return nil, fmt.Errorf("closed stream has error: %w", err)
+			return nil, fmt.Errorf("ошибка закрытия потока: %w", err)
 		}
 		if resp.Error != "" {
 			return nil, fmt.Errorf(errorEesponseReturn, resp.Error)
@@ -167,28 +175,28 @@ func (c Client) WriteFile(typ string, name string, data string) (*proto.WriteRec
 	case "file":
 		file, err := os.Open(data)
 		if err != nil {
-			return nil, fmt.Errorf("failed open file: %w", err)
+			return nil, fmt.Errorf("ошибка открытия файла: %w", err)
 		}
 
 		fi, err := file.Stat()
 		if err != nil {
-			return nil, fmt.Errorf("failed read stat file: %w", err)
+			return nil, fmt.Errorf("ошибка чтения информации о файле: %w", err)
 		}
 
 		if fi.Size() > int64(maxMsgSize) {
-			return nil, fmt.Errorf("maximum file size should be less: %v bytes", maxMsgSize)
+			return nil, fmt.Errorf("максимальный размер файла должен быть меньше: %v байт", maxMsgSize)
 		}
 
-		// Read the file in chunks and send
+		// Читаем файл частями и отправляем
 		chunkSize := 4096
 		buf := make([]byte, chunkSize)
 		for {
 			n, err := file.Read(buf)
 			if errors.Is(err, io.EOF) {
-				// End of file, close the stream
+				// Конец файла, закрываем поток
 				resp, err = stream.CloseAndRecv()
 				if err != nil {
-					return nil, fmt.Errorf("failed CloseAndRecv: %w", err)
+					return nil, fmt.Errorf("ошибка CloseAndRecv: %w", err)
 				}
 				if resp.Error != "" {
 					return nil, fmt.Errorf(errorEesponseReturn, resp.Error)
@@ -196,32 +204,32 @@ func (c Client) WriteFile(typ string, name string, data string) (*proto.WriteRec
 				break
 			}
 			if err != nil {
-				return nil, fmt.Errorf("failed read file: %w", err)
+				return nil, fmt.Errorf("ошибка чтения файла: %w", err)
 			}
 
-			// Send a piece of data
+			// Отправляем часть данных
 			err = stream.Send(&proto.WriteRecordRequest{Name: name, Data: buf[:n], Type: "file"})
 			if err != nil {
-				return nil, fmt.Errorf("failed send stream: %w", err)
+				return nil, fmt.Errorf("ошибка отправки потока: %w", err)
 			}
 		}
 
 		err = file.Close()
 		if err != nil {
-			return nil, fmt.Errorf("failed close file: %w", err)
+			return nil, fmt.Errorf("ошибка закрытия файла: %w", err)
 		}
 	}
 
 	return resp, nil
 }
 
-//nolint:dupl // This legal duplicate
+// DeleteFile удаляет запись по ID
 func (c Client) DeleteFile(id int32) (*proto.DeleteRecordResponse, error) {
-	// Set authorization in gRPC metadata
+	// Устанавливаем авторизацию в метаданных GRPC
 	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", c.Token))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
-	// Create client
+	// Создаем клиент
 	client := proto.NewStorageClient(c.Conn)
 	resp, err := client.DeleteRecord(ctx, &proto.DeleteRecordRequest{
 		Id: id,
@@ -237,20 +245,20 @@ func (c Client) DeleteFile(id int32) (*proto.DeleteRecordResponse, error) {
 	return resp, nil
 }
 
-// loadTLSCredentials loading certificates.
+// loadTLSCredentials загружает сертификаты
 func loadTLSCredentials(cert string) (credentials.TransportCredentials, error) {
-	// Load certificate of the CA who signed server's certificate
+	// Загружаем сертификат CA, который подписал сертификат сервера
 	pemServerCA, err := os.ReadFile(cert)
 	if err != nil {
-		return nil, fmt.Errorf("failde load file: %w", err)
+		return nil, fmt.Errorf("ошибка загрузки файла: %w", err)
 	}
 
 	certPool := x509.NewCertPool()
 	if !certPool.AppendCertsFromPEM(pemServerCA) {
-		return nil, fmt.Errorf("failed to add server CA's certificate")
+		return nil, fmt.Errorf("не удалось добавить сертификат CA сервера")
 	}
 
-	// Create the credentials and return it
+	// Создаем и возвращаем учетные данные
 	config := &tls.Config{
 		RootCAs:    certPool,
 		MinVersion: tls.VersionTLS12,

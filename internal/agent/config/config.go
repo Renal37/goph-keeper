@@ -1,4 +1,3 @@
-// Package config gets settings from environment variables or command line arguments.
 package config
 
 import (
@@ -12,56 +11,63 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// Права доступа по умолчанию для файлов
 var defaultPermition fs.FileMode = 0600
 
-// ConfigENV contains app settings.
+// ConfigENV содержит настройки приложения
 type ConfigENV struct {
-	Command     string
-	JWT         string `env:"JWT"`
-	ServerAddr  string `json:"server_addr" env:"SERVER_ADDR"`
-	Certificate string `json:"certificate"`
+	Command     string // Команда для хранилища GophKeeper
+	JWT         string `env:"JWT"`                            // JWT токен для авторизации
+	ServerAddr  string `json:"server_addr" env:"SERVER_ADDR"` // Адрес сервера
+	Certificate string `json:"certificate"`                   // Путь к сертификату
 }
 
-// GetConfig get app settings.
+// GetConfig получает настройки приложения из конфигурационных файлов и переменных окружения
 func GetConfig() (*ConfigENV, error) {
 	var eCfg ConfigENV
 	configPath := "config/agent.json"
 
-	flag.StringVar(&eCfg.Command, "c", "", "command for GophKeeper storage")
+	// Парсим флаги командной строки
+	flag.StringVar(&eCfg.Command, "c", "", "команда для хранилища GophKeeper")
 	flag.Parse()
 
+	// Открываем конфигурационный файл
 	file, err := os.Open(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open config file: %w", err)
+		return nil, fmt.Errorf("ошибка открытия конфигурационного файла: %w", err)
 	}
 
+	// Декодируем JSON конфигурацию
 	decoder := json.NewDecoder(file)
 	if err := decoder.Decode(&eCfg); err != nil {
-		return nil, fmt.Errorf("failed to decode config file: %w", err)
+		return nil, fmt.Errorf("ошибка декодирования конфигурационного файла: %w", err)
 	}
 
+	// Закрываем файл конфигурации
 	if err := file.Close(); err != nil {
-		return nil, fmt.Errorf("failed close config file: %w", err)
+		return nil, fmt.Errorf("ошибка закрытия конфигурационного файла: %w", err)
 	}
 
-	// Create .env file if not exist
+	// Создаем .env файл, если он не существует
 	file, err = os.OpenFile(".env", os.O_CREATE, defaultPermition)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create .env file: %w", err)
+		return nil, fmt.Errorf("ошибка создания файла .env: %w", err)
 	}
 	err = file.Close()
 	if err != nil {
-		return nil, fmt.Errorf("failed to close .env file: %w", err)
+		return nil, fmt.Errorf("ошибка закрытия файла .env: %w", err)
 	}
 
+	// Загружаем переменные окружения из .env файла
 	err = godotenv.Load(".env")
 	if err != nil {
-		return nil, fmt.Errorf("failed load .env file: %w", err)
+		return nil, fmt.Errorf("ошибка загрузки файла .env: %w", err)
 	}
 
+	// Парсим переменные окружения в структуру
 	err = env.Parse(&eCfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed parsing environment variables: %w", err)
+		return nil, fmt.Errorf("ошибка парсинга переменных окружения: %w", err)
 	}
 
 	return &eCfg, nil
