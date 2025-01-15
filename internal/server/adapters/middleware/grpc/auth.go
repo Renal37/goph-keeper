@@ -1,3 +1,4 @@
+// Package middleware provides various middlewares for the server.
 package middleware
 
 import (
@@ -14,21 +15,21 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// GetAuthenticator возвращает функцию для аутентификации gRPC-запросов с использованием JWT-токенов.
-// Использует функцию `AuthFromMD` для извлечения токена из метаданных и проверяет
-// токен с помощью `verifyJWTandGetPayload`. Если токен действителен, он устанавливает
-// утверждения токена в контексте и возвращает расширенный контекст. Если возникает ошибка,
-// возвращает ошибку неаутентифицированного доступа.
+// GetAuthenticator returns a function for authenticating gRPC requests using JWT tokens.
+// It uses the `AuthFromMD` function to extract the token from the metadata and verifies
+// the token using `verifyJWTandGetPayload`. If the token is valid, it sets the token's
+// claims in the context and returns the enhanced context. If an error occurs, it returns
+// an unauthenticated error.
 func GetAuthenticator(jwtKey string) func(ctx context.Context) (context.Context, error) {
 	return func(ctx context.Context) (context.Context, error) {
 		token, err := auth.AuthFromMD(ctx, "bearer")
 		if err != nil {
-			return nil, fmt.Errorf("Ошибка AuthFromMD: %w", err)
+			return nil, fmt.Errorf("AuthFromMD has error: %w", err)
 		}
 
 		pl, err := verifyJWTandGetPayload(jwtKey, token)
 		if err != nil {
-			//nolint:wrapcheck // Это допустимый возврат
+			//nolint:wrapcheck // This legal return
 			return nil, status.Error(codes.Unauthenticated, err.Error())
 		}
 
@@ -38,17 +39,17 @@ func GetAuthenticator(jwtKey string) func(ctx context.Context) (context.Context,
 	}
 }
 
-// AuthMatcher — это функция, которая определяет, должен ли данный gRPC-вызов
-// требовать аутентификации. Возвращает `true`, если имя службы не совпадает
-// с `User_ServiceDesc.ServiceName`, указывая, что аутентификация требуется.
+// AuthMatcher is a function that determines whether a given gRPC call should
+// require authentication. It returns `true` if the service name does not match
+// the `User_ServiceDesc.ServiceName`, indicating that authentication is required.
 func AuthMatcher(ctx context.Context, callMeta interceptors.CallMeta) bool {
 	return proto.User_ServiceDesc.ServiceName != callMeta.Service
 }
 
-// verifyJWTandGetPayload проверяет JWT-токен и возвращает его утверждения как `JWTclaims`.
-// Использует предоставленный `jwtKey` для разбора и проверки токена. Если токен
-// действителен, возвращает утверждения. Если возникает ошибка во время разбора или проверки,
-// возвращает ошибку.
+// verifyJWTandGetPayload verifies a JWT token and returns its claims as `JWTclaims`.
+// It uses the provided `jwtKey` to parse and validate the token. If the token
+// is valid, it returns the claims. If an error occurs during parsing or verification,
+// it returns the error.
 func verifyJWTandGetPayload(jwtKey string, token string) (middleware.JWTclaims, error) {
 	claims := &middleware.JWTclaims{}
 
@@ -58,13 +59,13 @@ func verifyJWTandGetPayload(jwtKey string, token string) (middleware.JWTclaims, 
 
 	if err != nil {
 		if errors.Is(err, jwt.ErrSignatureInvalid) {
-			return *claims, fmt.Errorf("Ошибка подписи JWT: %w", err)
+			return *claims, fmt.Errorf("failed signature from jwt: %w", err)
 		}
-		return *claims, fmt.Errorf("Недействительный JWT-токен: %w", err)
+		return *claims, fmt.Errorf("invalid jwt token: %w", err)
 	}
 
 	if !tkn.Valid {
-		return *claims, fmt.Errorf("JWT-токен недействителен: %w", err)
+		return *claims, fmt.Errorf("jwt token not valid: %w", err)
 	}
 
 	return *claims, nil

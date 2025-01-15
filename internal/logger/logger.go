@@ -1,3 +1,4 @@
+// Package logger contains a function for logging based on the Zap logging library.
 package logger
 
 import (
@@ -6,22 +7,19 @@ import (
 	"go.uber.org/zap"
 )
 
-// Init инициализирует логгер с указанным уровнем логирования
+// Init initializes the logger.
 func Init(level string) (*zap.Logger, error) {
-	// Парсим уровень логирования
 	lvl, err := zap.ParseAtomicLevel(level)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка при парсинге уровня логирования: %w", err)
+		return nil, fmt.Errorf("failed parse error level %w", err)
 	}
 
-	// Создаем конфигурацию для продакшн окружения
 	cfg := zap.NewProductionConfig()
 	cfg.Level = lvl
 
-	// Создаем логгер на основе конфигурации
 	zl, err := cfg.Build()
 	if err != nil {
-		return nil, fmt.Errorf("ошибка при создании конфигурации zap: %w", err)
+		return nil, fmt.Errorf("failed build zap config %w", err)
 	}
 
 	return zl, nil

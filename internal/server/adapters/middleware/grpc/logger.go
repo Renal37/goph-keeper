@@ -1,3 +1,4 @@
+// Package middleware provides various middlewares for the server.
 package middleware
 
 import (
@@ -7,13 +8,14 @@ import (
 	"go.uber.org/zap"
 )
 
-// InterceptorLogger возвращает реализацию `logging.Logger` для использования
-// с gRPC логирующими перехватчиками. Он отображает данный контекст, уровень
-// логирования и сообщение на соответствующую функцию логирования в предоставленном
-// `zap.Logger`, преобразуя поля из API `logging.Logger` в экземпляры `zap.Field`.
+// InterceptorLogger returns a `logging.Logger` implementation for use
+// with gRPC logging interceptors. It maps the given context, log level,
+// and message to the appropriate logging function in the provided
+// `zap.Logger`, while converting fields from the `logging.Logger` API
+// to `zap.Field` instances.
 func InterceptorLogger(l *zap.Logger) logging.Logger {
 	return logging.LoggerFunc(func(ctx context.Context, lvl logging.Level, msg string, fields ...any) {
-		//nolint:gomnd // Это допустимое число
+		//nolint:gomnd // This legal number
 		f := make([]zap.Field, 0, len(fields)/2)
 
 		for i := 0; i < len(fields); i += 2 {
@@ -44,8 +46,8 @@ func InterceptorLogger(l *zap.Logger) logging.Logger {
 		case logging.LevelError:
 			logger.Error(msg)
 		default:
-			logger.With(zap.Any("lvl", lvl)).Error("неизвестный уровень")
-			logger.With(zap.String("msg", msg)).Warn("не удалось обработать сообщение")
+			logger.With(zap.Any("lvl", lvl)).Error("unknown level")
+			logger.With(zap.String("msg", msg)).Warn("failed msg")
 		}
 	})
 }

@@ -1,3 +1,4 @@
+// Package middleware provides various middlewares for the server.
 package middleware
 
 import (
@@ -6,33 +7,34 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// contextKey представляет тип, используемый для ключей в пакете context.
-// Использование пользовательского типа помогает избежать коллизий с другими ключами контекста.
+// contextKey represents the type used for keys in the context package.
+// Using a custom type helps avoid collisions with other context keys.
 type contextKey int
 
-// JWTclaims представляет утверждения из JWT-токена, включая идентификатор пользователя,
-// логин и стандартные зарегистрированные утверждения JWT.
+// JWTclaims represents the claims from a JWT token, including the user ID,
+// login, and standard JWT registered claims.
 type JWTclaims struct {
 	ID    int    `json:"id"`
 	Login string `json:"login"`
 	jwt.RegisteredClaims
 }
 
-// Перечисление ключей контекста, используемых для хранения значений в контексте.
+// Enumeration of context keys used for storing values in context.
 const (
 	ContextKeyToken contextKey = iota
 )
 
-// GetTokenFromContext извлекает утверждения JWT из данного контекста.
-// Возвращает утверждения JWT и булево значение, указывающее, были ли утверждения
-// успешно извлечены. Если утверждения не найдены в контексте, функция возвращает false.
+// GetTokenFromContext retrieves JWT claims from the given context.
+// It returns the JWT claims and a boolean indicating whether the claims
+// were successfully retrieved. If the claims are not found in the context,
+// the function returns false.
 func GetTokenFromContext(ctx context.Context) (JWTclaims, bool) {
 	caller, ok := ctx.Value(ContextKeyToken).(JWTclaims)
 	return caller, ok
 }
 
-// SetTokenToContext добавляет утверждения JWT в данный контекст и возвращает
-// новый контекст. Он связывает утверждения с ключом `ContextKeyToken`.
+// SetTokenToContext adds JWT claims to the given context and returns
+// the new context. It associates the claims with the `ContextKeyToken` key.
 func SetTokenToContext(ctx context.Context, pl JWTclaims) context.Context {
 	return context.WithValue(ctx, ContextKeyToken, pl)
 }

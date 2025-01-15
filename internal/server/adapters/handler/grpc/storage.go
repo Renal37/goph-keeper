@@ -1,3 +1,4 @@
+// Package handler contains gRPC handlers that implement the server-side logic for the application.
 package handler
 
 import (
@@ -19,7 +20,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// StorageHandler обработчик для хранилища
 type StorageHandler struct {
 	proto.UnimplementedStorageServer
 	Svc       services.StorageService
@@ -27,14 +27,14 @@ type StorageHandler struct {
 	MasterKey string
 }
 
-var errorInvalidToken = "недействительный токен"
-var errorCloseStream = "ошибка закрытия потока: %w"
+var errorInvalidToken = "invalid token"
+var errorCloseStream = "failed close stream: %w"
 
-// ReadAllRecord читает все записи из БД
+// ReadAllRecord read all record from BD.
 func (s StorageHandler) ReadAllRecord(ctx context.Context, in *proto.ReadAllRecordRequest) (*proto.ReadAllRecordResponse, error) {
 	var resp proto.ReadAllRecordResponse
 
-	// Получаем токен из контекста
+	// Get token from context
 	token, ok := middleware.GetTokenFromContext(ctx)
 	if !ok {
 		s.Logger.Error(errorInvalidToken)
@@ -42,15 +42,15 @@ func (s StorageHandler) ReadAllRecord(ctx context.Context, in *proto.ReadAllReco
 		return &resp, nil
 	}
 
-	// Получаем данные из БД
+	// Get data from BD
 	rec, err := s.Svc.ReadAllRecord(token.ID)
 	if err != nil {
-		s.Logger.With(zap.Error(err)).Error("ошибка получения всех записей")
-		resp.Error = "ошибка получения всех записей"
+		s.Logger.With(zap.Error(err)).Error("failed get all records")
+		resp.Error = "failed get all records"
 		return &resp, nil
 	}
 
-	// Подготовка ответа
+	// Preparing response
 	respSlice := make([]*proto.StorageUnit, 0, len(rec))
 	for _, v := range rec {
 		respSlice = append(respSlice, &proto.StorageUnit{
@@ -65,11 +65,11 @@ func (s StorageHandler) ReadAllRecord(ctx context.Context, in *proto.ReadAllReco
 	return &resp, nil
 }
 
-// ReadRecord читает одну запись из БД
+// ReadRecord read single record from BD.
 func (s StorageHandler) ReadRecord(ctx context.Context, in *proto.ReadRecordRequest) (*proto.ReadRecordResponse, error) {
 	var resp proto.ReadRecordResponse
 
-	// Получаем токен из контекста
+	// Get token from context
 	token, ok := middleware.GetTokenFromContext(ctx)
 	if !ok {
 		s.Logger.Error(errorInvalidToken)
@@ -77,24 +77,24 @@ func (s StorageHandler) ReadRecord(ctx context.Context, in *proto.ReadRecordRequ
 		return &resp, nil
 	}
 
-	// Получаем запись из БД
+	// Get record from BD
 	rec, err := s.Svc.ReadRecord(int(in.Id), token.ID)
 	if err != nil {
-		s.Logger.With(zap.Error(err)).Error("ошибка чтения записи")
-		resp.Error = "ошибка чтения записи"
+		s.Logger.With(zap.Error(err)).Error("failed read record")
+		resp.Error = "failed read record"
 		return &resp, nil
 	}
 
 	if rec == nil {
-		resp.Error = "запись не найдена"
+		resp.Error = "record not found"
 		return &resp, nil
 	}
 
-	// Расшифровка данных
+	// Dectyption data
 	data, err := decryptionData(s.MasterKey, rec.Key, rec.Value)
 	if err != nil {
-		s.Logger.With(zap.Error(err)).Error("ошибка расшифровки данных")
-		resp.Error = "ошибка расшифровки данных"
+		s.Logger.With(zap.Error(err)).Error("failed decrypt data")
+		resp.Error = "failed decrypt data"
 		return &resp, nil
 	}
 
@@ -105,16 +105,16 @@ func (s StorageHandler) ReadRecord(ctx context.Context, in *proto.ReadRecordRequ
 	return &resp, nil
 }
 
-// WriteRecord записывает данные в БД
+// WriteRecord write record in BD.
 func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) error {
 	var resp proto.WriteRecordResponse
 	var fileName string
 	var fileType string
 
-	// Для чанков
+	// For chunk
 	buffer := &bytes.Buffer{}
 
-	// Получаем токен из контекста
+	// Get token from context
 	token, ok := middleware.GetTokenFromContext(stream.Context())
 	if !ok {
 		s.Logger.Error(errorInvalidToken)
@@ -132,8 +132,8 @@ func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) erro
 			break
 		}
 		if err != nil {
-			s.Logger.With(zap.Error(err)).Error("ошибка получения чанка")
-			resp.Error = "ошибка получения чанка"
+			s.Logger.With(zap.Error(err)).Error("failed recive chunk")
+			resp.Error = "failed recive chunk"
 
 			err := stream.SendAndClose(&resp)
 			if err != nil {
@@ -141,7 +141,7 @@ func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) erro
 			}
 		}
 
-		// Сохраняем имя файла из запроса
+		// Saving the file name from the request
 		if fileName == "" {
 			fileName = chunk.GetName()
 		}
@@ -150,10 +150,10 @@ func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) erro
 			fileType = chunk.GetType()
 		}
 
-		// Записываем данные в буфер
+		// Write the data to the buffer
 		if _, err := buffer.Write(chunk.GetData()); err != nil {
-			s.Logger.With(zap.Error(err)).Error("ошибка записи чанка в буфер")
-			resp.Error = "ошибка записи чанка в буфер"
+			s.Logger.With(zap.Error(err)).Error("failed write chunk to buffer")
+			resp.Error = "failed write chunk to buffer"
 
 			err := stream.SendAndClose(&resp)
 			if err != nil {
@@ -162,11 +162,11 @@ func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) erro
 		}
 	}
 
-	// Шифрование данных
+	// Encription data
 	data, key, err := encryptionData(s.MasterKey, buffer.Bytes())
 	if err != nil {
-		s.Logger.With(zap.Error(err)).Error("ошибка шифрования данных")
-		resp.Error = "ошибка шифрования данных"
+		s.Logger.With(zap.Error(err)).Error("failed encrypt data")
+		resp.Error = "failed encrypt data"
 
 		err := stream.SendAndClose(&resp)
 		if err != nil {
@@ -174,7 +174,7 @@ func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) erro
 		}
 	}
 
-	// Подготовка записи для сохранения
+	// Prepare record for save
 	var unit = domain.Storage{
 		Name:  fileName,
 		Type:  fileType,
@@ -183,11 +183,11 @@ func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) erro
 		Owner: token.ID,
 	}
 
-	// Запись в БД
+	// Write recorn in BD
 	err = s.Svc.WriteRecord(unit)
 	if err != nil {
-		s.Logger.With(zap.Error(err)).Error("ошибка записи в БД")
-		resp.Error = "ошибка записи в БД"
+		s.Logger.With(zap.Error(err)).Error("failed write record")
+		resp.Error = "failed write record"
 
 		err := stream.SendAndClose(&resp)
 		if err != nil {
@@ -195,7 +195,7 @@ func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) erro
 		}
 	}
 
-	// Закрываем поток
+	// Close stream
 	err = stream.SendAndClose(&resp)
 	if err != nil {
 		return fmt.Errorf(errorCloseStream, err)
@@ -204,11 +204,11 @@ func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) erro
 	return nil
 }
 
-// DeleteRecord удаляет запись из БД
+// DeleteRecord delete record from BD.
 func (s StorageHandler) DeleteRecord(ctx context.Context, in *proto.DeleteRecordRequest) (*proto.DeleteRecordResponse, error) {
 	var resp proto.DeleteRecordResponse
 
-	// Получаем токен из контекста
+	// Get token from context
 	token, ok := middleware.GetTokenFromContext(ctx)
 	if !ok {
 		s.Logger.Error(errorInvalidToken)
@@ -216,127 +216,135 @@ func (s StorageHandler) DeleteRecord(ctx context.Context, in *proto.DeleteRecord
 		return &resp, nil
 	}
 
-	// Удаляем запись
+	// Delete record
 	err := s.Svc.DeleteRecord(int(in.Id), token.ID)
 	if err != nil {
-		s.Logger.With(zap.Error(err)).Error("ошибка удаления записи")
-		resp.Error = "ошибка удаления записи"
+		s.Logger.With(zap.Error(err)).Error("failed delete record")
+		resp.Error = "failed delete record"
 		return &resp, nil
 	}
 
 	return &resp, nil
 }
 
-/* УТИЛИТЫ */
+/* UTILS. */
 
 var sizeRandomKey = 16
 
-// encryptionData шифрует данные с помощью мастер-ключа
 func encryptionData(mk string, data []byte) (string, string, error) {
 	key, err := generateRandom(sizeRandomKey)
 	if err != nil {
-		return "", "", fmt.Errorf("ошибка генерации случайных байтов: %w", err)
+		return "", "", fmt.Errorf("failed to generate random bytes: %w", err)
 	}
 
 	encKey, err := encrypt([]byte(mk), key)
 	if err != nil {
-		return "", "", fmt.Errorf("ошибка шифрования ключа: %w", err)
+		return "", "", fmt.Errorf("failed encript key: %w", err)
 	}
 
 	encData, err := encrypt(key, data)
 	if err != nil {
-		return "", "", fmt.Errorf("ошибка шифрования данных: %w", err)
+		return "", "", fmt.Errorf("failed encript data: %w", err)
 	}
 
 	return encData, encKey, nil
 }
 
-// decryptionData расшифровывает данные с помощью мастер-ключа
 func decryptionData(mk string, key string, data string) ([]byte, error) {
 	decKey, err := decrypt([]byte(mk), key)
 	if err != nil {
-		return []byte{}, fmt.Errorf("ошибка расшифровки ключа: %w", err)
+		return []byte{}, fmt.Errorf("failed decrypt key: %w", err)
 	}
 
 	decData, err := decrypt(decKey, data)
 	if err != nil {
-		return []byte{}, fmt.Errorf("ошибка расшифровки данных: %w", err)
+		return []byte{}, fmt.Errorf("failed decrypt data: %w", err)
 	}
 
 	return decData, nil
 }
 
-// encrypt шифрует данные с помощью AES-GCM
 func encrypt(key []byte, plaintext []byte) (string, error) {
+	// Преобразуйте ключ в байты нужной длины
 	keyBytes := adjustKeySize(key, sizeRandomKey)
+	// Создайте новый блок AES с использованием ключа
 	block, err := aes.NewCipher(keyBytes)
 	if err != nil {
-		return "", fmt.Errorf("ошибка создания AES шифра: %w", err)
+		return "", fmt.Errorf("failed to create AES cipher: %w", err)
 	}
 
+	// NewGCM возвращает заданный 128-битный блочный шифр
 	aesgcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", fmt.Errorf("ошибка создания шифра: %w", err)
+		return "", fmt.Errorf("failed to create chiper: %w", err)
 	}
 
+	// Создаём вектор инициализации
 	nonce, err := generateRandom(aesgcm.NonceSize())
 	if err != nil {
-		return "", fmt.Errorf("ошибка генерации случайных байтов: %w", err)
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
 	}
 
 	dst := aesgcm.Seal(nil, nonce, plaintext, nil)
+
+	// Кодируем зашифрованные данные в строку (base64)
 	encString := base64.StdEncoding.EncodeToString(nonce) + "*" + base64.StdEncoding.EncodeToString(dst)
 
 	return encString, nil
 }
 
-// decrypt расшифровывает данные с помощью AES-GCM
 func decrypt(key []byte, plaintext string) ([]byte, error) {
 	splStr := strings.Split(plaintext, "*")
 
+	// Получаем вектор
 	decNonce, err := base64.StdEncoding.DecodeString(splStr[0])
 	if err != nil {
-		return []byte{}, fmt.Errorf("ошибка декодирования base64: %w", err)
+		return []byte{}, fmt.Errorf("failed decode base64: %w", err)
 	}
 
+	// Зашифровваные данные
 	decString, err := base64.StdEncoding.DecodeString(splStr[1])
 	if err != nil {
-		return []byte{}, fmt.Errorf("ошибка декодирования base64: %w", err)
+		return []byte{}, fmt.Errorf("failed decode base64: %w", err)
 	}
 
+	// Преобразуйте ключ в байты нужной длины
 	keyBytes := adjustKeySize(key, sizeRandomKey)
 	block, err := aes.NewCipher(keyBytes)
 	if err != nil {
-		return []byte{}, fmt.Errorf("ошибка создания AES шифра: %w", err)
+		return []byte{}, fmt.Errorf("failed to create AES cipher: %w", err)
 	}
 
+	// NewGCM возвращает заданный 128-битный блочный шифр
 	aesgcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return []byte{}, fmt.Errorf("ошибка создания шифра: %w", err)
+		return []byte{}, fmt.Errorf("failed to create chiper: %w", err)
 	}
 
+	// Расшифровываем
 	dst, err := aesgcm.Open(nil, decNonce, decString, nil)
 	if err != nil {
-		return []byte{}, fmt.Errorf("ошибка расшифровки: %w", err)
+		return []byte{}, fmt.Errorf("failed open decrypts: %w", err)
 	}
 
 	return dst, nil
 }
 
-// adjustKeySize корректирует размер ключа до нужной длины
 func adjustKeySize(originalKey []byte, desiredSize int) []byte {
+	// Если исходный ключ больше желаемого размера, обрезаем его
 	if len(originalKey) > desiredSize {
 		return originalKey[:desiredSize]
 	}
+
 	return originalKey
 }
 
-// generateRandom генерирует случайные байты заданного размера
 func generateRandom(size int) ([]byte, error) {
 	b := make([]byte, size)
 	_, err := rand.Read(b)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка генерации байтов: %w", err)
+		return nil, fmt.Errorf("failed generate byte: %w", err)
 	}
+
 	return b, nil
 }
