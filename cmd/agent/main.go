@@ -16,44 +16,50 @@ var (
 )
 
 func main() {
+	// Получение конфигурации
 	eCfg, err := config.GetConfig()
 	if err != nil {
 		log.Fatalln(err)
 	}
 
+	// Инициализация логгера
 	lg, err := logger.Init("info")
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	fmt.Println("*************************************")
-	fmt.Println("Welcome GophKepeer client")
-	fmt.Printf("Build version: %v \n", buildVersion)
-	fmt.Printf("Build date: %v \n", buildDate)
+	fmt.Println("Добро пожаловать в GophKeeper клиент")
+	fmt.Printf("Версия сборки: %v \n", buildVersion)
+	fmt.Printf("Дата сборки: %v \n", buildDate)
 	fmt.Println("*************************************")
 
+	// Вывод справки по доступным командам
 	if eCfg.Command == "" {
-		fmt.Println("Support command -c:")
-		fmt.Println("sign-up - create new account")
-		fmt.Println("sign-in - sign in with your account")
-		fmt.Println("read-file - read all files on your account")
-		fmt.Println("write-file - write file on your account")
-		fmt.Println("delete-file - delete file from your account")
+		fmt.Println("Поддерживаемые команды -c:")
+		fmt.Println("sign-up - создать новый аккаунт")
+		fmt.Println("sign-in - войти в существующий аккаунт")
+		fmt.Println("read-file - прочитать все файлы в вашем аккаунте")
+		fmt.Println("write-file - записать файл в ваш аккаунт")
+		fmt.Println("delete-file - удалить файл из вашего аккаунта")
 		fmt.Println("*************************************")
 	}
 
+	// Создание нового клиента
 	cl, err := client.NewClient(eCfg.ServerAddr, eCfg.Certificate, eCfg.JWT)
 	if err != nil {
-		lg.Sugar().Fatalf("failed create client: %s", err.Error())
+		lg.Sugar().Fatalf("ошибка создания клиента: %s", err.Error())
 	}
 
+	// Выполнение команды
 	err = core.Run(cl, eCfg.Command)
 	if err != nil {
-		lg.Sugar().Fatalf("failed command from client: %s", err.Error())
+		lg.Sugar().Fatalf("ошибка выполнения команды клиента: %s", err.Error())
 	}
 
+	// Закрытие клиента
 	err = cl.Close()
 	if err != nil {
-		lg.Sugar().Fatalf("failed close client: %s", err.Error())
+		lg.Sugar().Fatalf("ошибка закрытия клиента: %s", err.Error())
 	}
 }

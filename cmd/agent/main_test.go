@@ -37,18 +37,18 @@ var testMasterKey = "1234567812345678"
 var testMaxMsgSize = 100000648
 
 func TestMain(m *testing.M) {
-	// uses a sensible default on windows (tcp/http) and linux/osx (socket)
+	// использует разумные значения по умолчанию для windows (tcp/http) и linux/osx (socket)
 	pool, err := dockertest.NewPool("")
 	if err != nil {
-		log.Fatalf("Could not construct pool: %s", err)
+		log.Fatalf("Не удалось создать пул: %s", err)
 	}
 
 	err = pool.Client.Ping()
 	if err != nil {
-		log.Fatalf("Could not connect to Docker: %s", err)
+		log.Fatalf("Не удалось подключиться к Docker: %s", err)
 	}
 
-	// pulls an image, creates a container based on it and runs it
+	// загружает образ, создает контейнер на его основе и запускает его
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository: "postgres",
 		Tag:        "16.1-alpine3.18",
@@ -58,50 +58,50 @@ func TestMain(m *testing.M) {
 			"listen_addresses = '*'",
 		},
 	}, func(config *docker.HostConfig) {
-		// set AutoRemove to true so that stopped container goes away by itself
+		// установить AutoRemove в true, чтобы остановленный контейнер удалялся автоматически
 		config.AutoRemove = true
 		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
 	})
 	if err != nil {
-		log.Fatalf("Could not start resource: %s", err)
+		log.Fatalf("Не удалось запустить ресурс: %s", err)
 	}
 
 	hostAndPort := resource.GetHostPort("5432/tcp")
 	databaseURL = fmt.Sprintf("postgres://test:test@%s?sslmode=disable", hostAndPort)
 
-	log.Println("Connecting to database on url: ", databaseURL)
+	log.Println("Подключение к базе данных по URL: ", databaseURL)
 
-	// Tell docker to hard kill the container in 120 seconds
+	// Указываем Docker принудительно завершить контейнер через 120 секунд
 	err = resource.Expire(120)
 	if err != nil {
-		log.Fatalf("Expire resource has error: %s", err)
+		log.Fatalf("Ошибка при установке времени истечения ресурса: %s", err)
 	}
 
 	var sqlDB *sql.DB
-	// exponential backoff-retry, because the application in the container might not be ready to accept connections yet
+	// экспоненциальная попытка переподключения, так как приложение в контейнере может быть еще не готово принимать соединения
 	pool.MaxWait = 20 * time.Second
 	if err = pool.Retry(func() error {
 		sqlDB, err = sql.Open("postgres", databaseURL)
 		if err != nil {
-			return fmt.Errorf("Connection has error: %w", err)
+			return fmt.Errorf("Ошибка подключения: %w", err)
 		}
 
 		err = sqlDB.Ping()
 		if err != nil {
-			return fmt.Errorf("Ping has error: %w", err)
+			return fmt.Errorf("Ошибка при выполнении ping: %w", err)
 		}
 
 		return nil
 	}); err != nil {
-		log.Fatalf("Could not connect to docker: %s", err)
+		log.Fatalf("Не удалось подключиться к docker: %s", err)
 	}
 
-	// Run tests
+	// Запуск тестов
 	code := m.Run()
 
-	// You can't defer this because os.Exit doesn't care for defer
+	// Нельзя использовать defer, так как os.Exit не учитывает defer
 	if err := pool.Purge(resource); err != nil {
-		log.Fatalf("Could not purge resource: %s", err)
+		log.Fatalf("Не удалось очистить ресурс: %s", err)
 	}
 
 	os.Exit(code)
@@ -137,14 +137,14 @@ func testServer(ctx context.Context) (*client.Client, func()) {
 	)
 	userSvc := services.NewUserService(repo)
 
-	// Create user service
+	// Создание сервиса пользователей
 	proto.RegisterUserServer(baseServer, &handler.UserHandler{
 		Svc:    *userSvc,
 		Logger: lg,
 		JWTkey: testJWTkey,
 	})
 
-	// Create storage service
+	// Создание сервиса хранилища
 	storageSvc := services.NewStorageService(repo)
 	proto.RegisterStorageServer(baseServer, &handler.StorageHandler{
 		Svc:       *storageSvc,
@@ -154,33 +154,32 @@ func testServer(ctx context.Context) (*client.Client, func()) {
 
 	go func() {
 		if err := baseServer.Serve(lis); err != nil {
-			log.Printf("error serving server: %v", err)
+			log.Printf("ошибка при запуске сервера: %v", err)
 		}
 	}()
 
 	conn, err := grpc.DialContext(ctx, "",
 		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-			//nolint:wrapcheck // This legal return
 			return lis.Dial()
 		}),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(testMaxMsgSize), grpc.MaxCallSendMsgSize(testMaxMsgSize)),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		log.Printf("error connecting to server: %v", err)
+		log.Printf("ошибка подключения к серверу: %v", err)
 	}
 
 	closer := func() {
 		err := lis.Close()
 		if err != nil {
-			log.Printf("error closing listener: %v", err)
+			log.Printf("ошибка закрытия listener: %v", err)
 		}
 		baseServer.Stop()
 	}
 
 	token, err := getJWT(testJWTkey, 1, "test")
 	if err != nil {
-		log.Printf("error get jwt: %v", err)
+		log.Printf("ошибка получения jwt: %v", err)
 	}
 
 	return &client.Client{
@@ -268,7 +267,7 @@ func TestReadFile(t *testing.T) {
 	assert.Equal(t, r.Type, "file")
 }
 
-/* UTILS. */
+/* ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ */
 func getJWT(jwtKey string, id int, login string) (*string, error) {
 	var DefaultSession = 30
 	var DefaultExpTime = time.Now().Add(time.Duration(DefaultSession) * time.Minute)
@@ -284,7 +283,7 @@ func getJWT(jwtKey string, id int, login string) (*string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString([]byte(jwtKey))
 	if err != nil {
-		return nil, fmt.Errorf("failed signed jwt: %w", err)
+		return nil, fmt.Errorf("ошибка подписи jwt: %w", err)
 	}
 
 	return &tokenString, nil
