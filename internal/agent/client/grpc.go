@@ -17,6 +17,7 @@ import (
 
 // Максимальный размер сообщения
 var maxMsgSize = 100000648
+
 // Шаблоны сообщений об ошибках
 var errorResponseFinished = "ошибка завершения ответа: %w"
 var errorEesponseReturn = "ошибка возврата ответа: %w"

@@ -1,4 +1,3 @@
-// Package config gets settings from environment variables or command line arguments.
 package config
 
 import (
