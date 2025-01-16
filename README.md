@@ -24,8 +24,7 @@ $JWT_KEY
 
 Аргументы:
 ```
-- mk "1234567812345678" //master key for encryption keys
-```
+- mk "1234567812345678" ```
 
 Пример запуска сервера:
 ```
@@ -47,7 +46,7 @@ $JWT
 
 Аргументы:
 ```
-- c "read-file" //command for GophKeeper storage
+- c "read-file" //command for storage
 
 Support command -c:
 sign-up - create new account
