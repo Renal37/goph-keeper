@@ -1,61 +1,71 @@
 package main
 
 import (
-	"context"
+	"flag"
 	"fmt"
-	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
-	"github.com/Renal37/goph-keeper/internal/logger"
-	repository "github.com/Renal37/goph-keeper/internal/server/adapters/repository/pg"
-	"github.com/Renal37/goph-keeper/internal/server/config"
-	"github.com/Renal37/goph-keeper/internal/server/core"
+	"github.com/kuzhukin/goph-keeper/internal/server"
+	"github.com/kuzhukin/goph-keeper/internal/server/config"
+	"github.com/kuzhukin/goph-keeper/internal/yaml"
+	"github.com/kuzhukin/goph-keeper/internal/zlog"
 )
 
-var (
-	// Минимальное количество символов для мастер-ключа
-	minimumCharMasterKey = 16
-	// Версия сборки, по умолчанию "N/A"
-	buildVersion string = "N/A"
-	// Дата сборки, по умолчанию "N/A"
-	buildDate string = "N/A"
-)
+const serverStopTimeout = time.Second * 30
 
 func main() {
-	// Получаем конфигурацию из окружения
-	eCfg, err := config.GetConfig()
+	defer func() {
+		_ = zlog.Logger().Sync()
+	}()
+
+	if err := run(); err != nil {
+		panic(err)
+	}
+}
+
+func run() error {
+	zlog.Logger().Info("starting goph-keeper server...")
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
+
+	configPath := flag.String("c", getenv("CONFIG_FILE", "config.yaml"), "Path config file")
+
+	config, err := yaml.ReadYaml[config.Config](*configPath)
 	if err != nil {
-		log.Fatalln("Ошибка при загрузке конфигурации:", err)
+		return fmt.Errorf("read config, err=%w", err)
 	}
 
-	// Инициализация логгера
-	lg, err := logger.Init("info")
+	zlog.Logger().Infof("configPath: %s; config: %+v", *configPath, config)
+
+	srvr, err := server.StartNew(config)
 	if err != nil {
-		log.Fatalln("Ошибка при инициализации логгера:", err)
+		return fmt.Errorf("start server err=%w", err)
 	}
 
-	// Логируем информацию о версии и дате сборки
-	lg.Info(fmt.Sprintf("Версия сборки: %v", buildVersion))
-	lg.Info(fmt.Sprintf("Дата сборки: %v", buildDate))
-
-	// Проверка наличия мастер-ключа
-	if eCfg.MasterKey == "" {
-		lg.Fatal("Мастер-ключ не найден! Пожалуйста, используйте флаг -mk")
+	sig := <-sigs
+	zlog.Logger().Infof("Stop server by osSignal=%v", sig)
+	if err := srvr.Stop(); err != nil {
+		return fmt.Errorf("stop server, err=%w", err)
 	}
 
-	// Проверка длины мастер-ключа
-	if len(eCfg.MasterKey) < minimumCharMasterKey {
-		lg.Sugar().Fatalf("Минимальная длина мастер-ключа должна быть %v символов!", minimumCharMasterKey)
+	select {
+	case <-srvr.WaitStop():
+		zlog.Logger().Infof("Server stopped")
+	case <-time.After(serverStopTimeout):
+		zlog.Logger().Infof("Server stopped by timeout=%v", serverStopTimeout)
 	}
 
-	// Инициализация подключения к базе данных
-	repo, err := repository.NewDB(context.Background(), lg, eCfg.DSN)
-	if err != nil {
-		lg.Fatal("Ошибка при подключении к базе данных: " + err.Error())
+	return nil
+}
+
+func getenv(name, defaultVal string) string {
+	val := os.Getenv(name)
+	if len(val) == 0 {
+		return defaultVal
 	}
 
-	// Запуск GRPC сервера
-	err = core.RunGRPCserver(lg, eCfg.Host, eCfg.CertificatePath, eCfg.CertificateKeyPath, eCfg.JWTkey, eCfg.MasterKey, repo)
-	if err != nil {
-		lg.Fatal("Ошибка при запуске GRPC сервера: " + err.Error())
-	}
+	return val
 }

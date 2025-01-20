@@ -1,3 +1,8 @@
+// Package repository contains the data access layer for the application,
+// providing functions to interact with the database and perform operations
+// related to the domain entities such as `User` and `Storage`. This package
+// serves as an interface between the application services and the database,
+// utilizing an ORM (such as GORM) to execute queries and manage transactions.
 package repository
 
 import (
@@ -15,11 +20,11 @@ type DB struct {
 	db *gorm.DB
 }
 
-// NewDB инициализирует новую сессию базы данных, используя предоставленный DSN (имя источника данных).
-// Он подключается к базе данных PostgreSQL с использованием GORM и настраивает логгер для работы в тихом режиме.
-// Если подключение успешно, он продолжает миграцию схемы с использованием
-// AutoMigrate для моделей домена `User` и `Storage`. Если возникает ошибка во время
-// инициализации или миграции, возвращается ошибка вместе с частично инициализированным экземпляром `DB`.
+// NewDB initializes a new database session using the given DSN (Data Source Name).
+// It connects to the PostgreSQL database using GORM and configures the logger to operate in silent mode.
+// If the connection is successful, it proceeds to migrate the schema using
+// AutoMigrate for the `User` and `Storage` domain models. If an error occurs during
+// initialization or migration, an error is returned along with a partially initialized `DB` instance.
 func NewDB(ctx context.Context, lg *zap.Logger, dsn string) (*DB, error) {
 	db, err := gorm.Open(postgres.New(postgres.Config{
 		DSN: dsn,
@@ -27,32 +32,32 @@ func NewDB(ctx context.Context, lg *zap.Logger, dsn string) (*DB, error) {
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
-		return &DB{}, fmt.Errorf("не удалось инициализировать сессию базы данных: %w", err)
+		return &DB{}, fmt.Errorf("failed init db session: %w", err)
 	}
 
-	// Миграция схемы
+	// Migrate the schema
 	err = db.AutoMigrate(&domain.User{}, &domain.Storage{})
 	if err != nil {
-		return &DB{}, fmt.Errorf("не удалось мигрировать модели: %w", err)
+		return &DB{}, fmt.Errorf("failed migrate models: %w", err)
 	}
 
-	lg.Info("Подключение к PostgreSQL: успешно")
+	lg.Info(("Connection to postgre: success"))
 
 	return &DB{
 		db: db,
 	}, nil
 }
 
-// Close закрывает соединение с базой данных.
+// Close close database connection.
 func (s DB) Close() error {
 	sqlDB, err := s.db.DB()
 	if err != nil {
-		return fmt.Errorf("не удалось получить SQL DB: %w", err)
+		return fmt.Errorf("failed get sql db: %w", err)
 	}
 
 	err = sqlDB.Close()
 	if err != nil {
-		return fmt.Errorf("не удалось закрыть базу данных: %w", err)
+		return fmt.Errorf("failed close db: %w", err)
 	}
 
 	return nil

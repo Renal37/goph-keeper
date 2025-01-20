@@ -1,19 +1,24 @@
+// Package repository contains the data access layer for the application,
+// providing functions to interact with the database and perform operations
+// related to the domain entities such as `User` and `Storage`. This package
+// serves as an interface between the application services and the database,
+// utilizing an ORM (such as GORM) to execute queries and manage transactions.
 package repository
 
 import (
 	"github.com/Renal37/goph-keeper/internal/server/core/domain"
 )
 
-// FindUserByLogin находит пользователя по его логину. Использует метод ORM `First`
-// для поиска пользователя с указанным логином в базе данных. Если пользователь
-// не найден, возвращает `nil` для пользователя и ошибки. Если возникает ошибка
-// во время операции с базой данных, возвращает `nil` для пользователя и ошибку.
+// FindUserByLogin retrieves a user by their login. It uses the ORM `First` method
+// to find a user with the specified login in the database. If the user is not found,
+// it returns `nil` for both the user and error. If an error occurs during the
+// database operation, it returns `nil` for the user and the error.
 func (s *DB) FindUserByLogin(login string) (*domain.User, error) {
 	user := domain.User{}
 
 	req := s.db.First(&user, "login = ?", login)
 	if req.RowsAffected == 0 {
-		//nolint:nilnil // Это допустимый возврат
+		//nolint:nilnil // This legal return
 		return nil, nil
 	}
 
@@ -24,10 +29,10 @@ func (s *DB) FindUserByLogin(login string) (*domain.User, error) {
 	return &user, nil
 }
 
-// CreateUser создает нового пользователя с указанным логином и хешированным паролем.
-// Использует метод ORM `Create` для добавления нового пользователя в базу данных.
-// Если возникает ошибка во время операции с базой данных, возвращает `nil` для
-// пользователя и ошибку. Если успешно, возвращает указатель на созданного пользователя.
+// CreateUser creates a new user with the given login and hashed password.
+// It uses the ORM `Create` method to add the new user to the database.
+// If an error occurs during the database operation, it returns `nil` for
+// the user and the error. If successful, it returns a pointer to the created user.
 func (s *DB) CreateUser(login, hash string) (*domain.User, error) {
 	user := domain.User{
 		Login: login,

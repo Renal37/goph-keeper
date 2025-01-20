@@ -1,19 +1,65 @@
-.PHONY: build-server build-agent cert
+ALL_TARGETS = client server
+GO = go
 
-build:
-	make cert
-	make build-server
-	make build-agent
+define build
+	${GO} build -o ./cmd/$(1)/ -v ./cmd/$(1)/ 
+endef
 
-build-server:
-	cd cmd/server; GOOS=linux GOARCH=amd64 go build -o server-linux-amd64 main.go; cd ../..
-	cd cmd/server; GOOS=windows GOARCH=amd64 go build -o server-win-amd64 main.go; cd ../..
-	cd cmd/server; GOOS=darwin GOARCH=amd64 go build -o server-darwin-amd64 main.go; cd ../..
+all: build
 
-build-agent:
-	cd cmd/agent; GOOS=linux GOARCH=amd64 go build -o agent-linux-amd64 main.go; cd ../..
-	cd cmd/agent; GOOS=windows GOARCH=amd64 go build -o agent-win-amd64 main.go; cd ../..
-	cd cmd/agent; GOOS=darwin GOARCH=amd64 go build -o agent-darwin-amd64 main.go; cd ../..
+.PHONY: build
+build: $(patsubst %, build-%, $(ALL_TARGETS))
 
-cert:
-	cd cert; ./gencert.sh; cd ..
+
+.PHONY: build-%
+build-%:
+	@echo === Building $*
+	$(call build,$*)
+
+.PHONY: test
+test:
+	@echo === Tests
+	${GO} test -count 1 -v -cover ./...
+
+define clean
+	rm ./cmd/$(1)/$(1)
+endef
+
+.PHONY: clean
+clean: $(patsubst %, clean-%, $(ALL_TARGETS))
+
+clean-%:
+	@echo === Cleaning $*
+	$(call clean,$*)
+
+# Linter constants
+LINTER := golangci-lint 
+
+.PHONY: lint
+lint:
+	@echo === Lint
+	$(LINTER) --version
+	$(LINTER) cache clean && $(LINTER) run
+
+generate:
+	${GO} generate ./...
+
+.PHONY: test_with_coverage
+test_with_coverage:
+	${GO} test -count=1 -coverprofile=coverage.out ./...
+
+.PHONY: coverage_total
+coverage_total: test_with_coverage
+	PERCENTAGE=$$(${GO} tool cover -func=coverage.out | grep "total:" | tr -s '\t' | cut -f3); \
+	echo Total coverage: $${PERCENTAGE}
+
+.PHONY: coverage_html
+coverage_html: test_with_coverage
+	${GO} tool cover -html=coverage.out -o coverage.html && firefox ./coverage.html
+
+run_server:
+	docker stop gophkeeper-postgres > /dev/null
+	docker rm gophkeeper-postgres > /dev/null
+	docker run -d --name gophkeeper-postgres -p 5431:5432 -e POSTGRES_DB=gophkeeper-db -e POSTGRES_USER=gophkeeper-user -e POSTGRES_PASSWORD=12345 postgres:12-alpine && \
+	sleep 5 && \
+	cmd/server/server -c config.yaml
