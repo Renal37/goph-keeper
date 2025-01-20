@@ -8,10 +8,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kuzhukin/goph-keeper/internal/server"
-	"github.com/kuzhukin/goph-keeper/internal/server/config"
-	"github.com/kuzhukin/goph-keeper/internal/yaml"
-	"github.com/kuzhukin/goph-keeper/internal/zlog"
+	"github.com/Renal37/goph-keeper/internal/server"
+	"github.com/Renal37/goph-keeper/internal/server/config"
+	"github.com/Renal37/goph-keeper/internal/yaml"
+	"github.com/Renal37/goph-keeper/internal/zlog"
 )
 
 const serverStopTimeout = time.Second * 30

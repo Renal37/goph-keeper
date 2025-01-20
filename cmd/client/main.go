@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/kuzhukin/goph-keeper/internal/client/cli"
-	"github.com/kuzhukin/goph-keeper/internal/zlog"
+	"github.com/Renal37/goph-keeper/internal/client/cli"
+	"github.com/Renal37/goph-keeper/internal/zlog"
 )
 
 func main() {
