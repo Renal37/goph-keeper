@@ -1,51 +1,71 @@
 package main
 
 import (
-	"context"
+	"flag"
 	"fmt"
-	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
-	"github.com/Renal37/goph-keeper/internal/logger"
-	repository "github.com/Renal37/goph-keeper/internal/server/adapters/repository/pg"
+	"github.com/Renal37/goph-keeper/internal/server"
 	"github.com/Renal37/goph-keeper/internal/server/config"
-	"github.com/Renal37/goph-keeper/internal/server/core"
+	"github.com/Renal37/goph-keeper/internal/yaml"
+	"github.com/Renal37/goph-keeper/internal/zlog"
 )
 
-var (
-	minimumCharMasterKey        = 16
-	buildVersion         string = "N/A"
-	buildDate            string = "N/A"
-)
+const serverStopTimeout = time.Second * 30
 
 func main() {
-	eCfg, err := config.GetConfig()
+	defer func() {
+		_ = zlog.Logger().Sync()
+	}()
+
+	if err := run(); err != nil {
+		panic(err)
+	}
+}
+
+func run() error {
+	zlog.Logger().Info("starting goph-keeper server...")
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
+
+	configPath := flag.String("c", getenv("CONFIG_FILE", "config.yaml"), "Path config file")
+
+	config, err := yaml.ReadYaml[config.Config](*configPath)
 	if err != nil {
-		log.Fatalln(err)
+		return fmt.Errorf("read config, err=%w", err)
 	}
 
-	lg, err := logger.Init("info")
+	zlog.Logger().Infof("configPath: %s; config: %+v", *configPath, config)
+
+	srvr, err := server.StartNew(config)
 	if err != nil {
-		log.Fatalln(err)
+		return fmt.Errorf("start server err=%w", err)
 	}
 
-	lg.Info(fmt.Sprintf("Build version: %v", buildVersion))
-	lg.Info(fmt.Sprintf("Build date: %v", buildDate))
-
-	if eCfg.MasterKey == "" {
-		lg.Fatal("Master key not found! Please use flag -mk")
+	sig := <-sigs
+	zlog.Logger().Infof("Stop server by osSignal=%v", sig)
+	if err := srvr.Stop(); err != nil {
+		return fmt.Errorf("stop server, err=%w", err)
 	}
 
-	if len(eCfg.MasterKey) < minimumCharMasterKey {
-		lg.Sugar().Fatalf("Minimum length master key %v characters!", minimumCharMasterKey)
+	select {
+	case <-srvr.WaitStop():
+		zlog.Logger().Infof("Server stopped")
+	case <-time.After(serverStopTimeout):
+		zlog.Logger().Infof("Server stopped by timeout=%v", serverStopTimeout)
 	}
 
-	repo, err := repository.NewDB(context.Background(), lg, eCfg.DSN)
-	if err != nil {
-		lg.Fatal(err.Error())
+	return nil
+}
+
+func getenv(name, defaultVal string) string {
+	val := os.Getenv(name)
+	if len(val) == 0 {
+		return defaultVal
 	}
 
-	err = core.RunGRPCserver(lg, eCfg.Host, eCfg.CertificatePath, eCfg.CertificateKeyPath, eCfg.JWTkey, eCfg.MasterKey, repo)
-	if err != nil {
-		lg.Fatal(err.Error())
-	}
+	return val
 }

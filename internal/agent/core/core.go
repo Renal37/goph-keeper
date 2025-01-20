@@ -12,211 +12,207 @@ import (
 	"github.com/Renal37/goph-keeper/internal/agent/client"
 )
 
+// Права доступа по умолчанию для файлов
 var defaultPermition fs.FileMode = 0600
-var errorFailedReadSTDIN = "failed read stdin: %w"
 
+// Шаблон ошибки чтения из STDIN
+var errorFailedReadSTDIN = "ошибка чтения из STDIN: %w"
+
+// Run выполняет основную логику приложения в зависимости от команды
 func Run(client *client.Client, command string) error {
-	// Depending on the command, we choose the logic of behavior
+	// В зависимости от команды выбираем логику поведения
 	switch command {
 	case "sign-up":
-		fmt.Println("-> Create new account")
+		fmt.Println("-> Создание нового аккаунта")
 
-		// Get user credentials from stdin tui
+		// Получаем учетные данные пользователя из stdin
 		ss, err := getUserCredentials()
 		if err != nil {
-			return fmt.Errorf("failed get user credentials: %w", err)
+			return fmt.Errorf("ошибка получения учетных данных: %w", err)
 		}
 
 		r, err := client.Register(ss.login, ss.password)
 		if err != nil {
-			return fmt.Errorf("failed register user: %w", err)
+			return fmt.Errorf("ошибка регистрации пользователя: %w", err)
 		}
 
-		fmt.Printf("Token: %s \n", r.Jwt)
+		fmt.Printf("Токен: %s \n", r.Jwt)
 
-		// Do you want to save the token?
+		// Сохраняем токен
 		err = saveAuthToken(r.Jwt)
 		if err != nil {
-			return fmt.Errorf("client failed save token: %w", err)
+			return fmt.Errorf("ошибка сохранения токена: %w", err)
 		}
 	case "sign-in":
-		fmt.Println("-> Sign in with your account")
+		fmt.Println("-> Вход в аккаунт")
 
 		ss, err := getUserCredentials()
 		if err != nil {
-			return fmt.Errorf("failed get user credentials: %w", err)
+			return fmt.Errorf("ошибка получения учетных данных: %w", err)
 		}
 
 		r, err := client.Login(ss.login, ss.password)
 		if err != nil {
-			return fmt.Errorf("failed login user: %w", err)
+			return fmt.Errorf("ошибка входа пользователя: %w", err)
 		}
 
-		fmt.Printf("Token: %s \n", r.Jwt)
+		fmt.Printf("Токен: %s \n", r.Jwt)
 		err = saveAuthToken(r.Jwt)
 		if err != nil {
-			return fmt.Errorf("client failed save token: %w", err)
+			return fmt.Errorf("ошибка сохранения токена: %w", err)
 		}
 	case "read-file":
-		fmt.Println("-> Read file")
+		fmt.Println("-> Чтение файла")
 
-		// Request to read all file
+		// Запрос на чтение всех файлов
 		rAllFile, err := client.ReadAllFile()
 		if err != nil {
-			return fmt.Errorf("failed get all file: %w", err)
+			return fmt.Errorf("ошибка получения списка файлов: %w", err)
 		}
 
-		// If there are no files, exit
+		// Если файлов нет, выходим
 		if len(rAllFile.Units) == 0 {
-			fmt.Println("Not found files. Bye!")
+			fmt.Println("Файлы не найдены. До свидания!")
 			return nil
 		}
 
-		// Showing the available files
-		fmt.Println("Available files:")
+		// Показываем доступные файлы
+		fmt.Println("Доступные файлы:")
 		for _, v := range rAllFile.Units {
-			// TODO: Откуда 0 ? Size slice ?
 			if v.Id > 0 {
 				fmt.Printf("[%v] - %s \n", v.Id, v.Name)
 			}
 		}
 
-		// Selecting a file to download
+		// Выбор файла для загрузки
 		i, err := selectReadFile()
 		if err != nil {
-			return fmt.Errorf("wrong id file: %w", err)
+			return fmt.Errorf("неверный ID файла: %w", err)
 		}
 
-		// Request to read the file
+		// Запрос на чтение файла
 		rFile, err := client.ReadFile(int32(i))
 		if err != nil {
-			return fmt.Errorf("failed get all file: %w", err)
+			return fmt.Errorf("ошибка получения файла: %w", err)
 		}
 
-		// If the file type is file
+		// Если тип файла - файл
 		if rFile.Type == "file" {
 			err = saveFileInDisk(rFile.Name, rFile.Data)
 			if err != nil {
-				return fmt.Errorf("save file has error: %w", err)
+				return fmt.Errorf("ошибка сохранения файла: %w", err)
 			}
 		} else {
-			// Else type is text
+			// Иначе тип - текст
 			fmt.Println(string(rFile.Data))
 		}
 	case "write-file":
-		fmt.Println("-> Write file")
+		fmt.Println("-> Запись файла")
 
-		// Selecting the file type and the file we want to save
+		// Выбор типа файла и файла для сохранения
 		err := selectWriteData(client)
 		if err != nil {
-			return fmt.Errorf("select write data has error: %w", err)
+			return fmt.Errorf("ошибка выбора данных для записи: %w", err)
 		}
 	case "delete-file":
-		fmt.Println("-> Delete file")
+		fmt.Println("-> Удаление файла")
 
-		// Request to read all file
+		// Запрос на чтение всех файлов
 		rAllFile, err := client.ReadAllFile()
 		if err != nil {
-			return fmt.Errorf("failed get all file: %w", err)
+			return fmt.Errorf("ошибка получения списка файлов: %w", err)
 		}
 
-		// If there are no files, exit
+		// Если файлов нет, выходим
 		if len(rAllFile.Units) == 0 {
-			fmt.Println("Not found files. Bye!")
+			fmt.Println("Файлы не найдены. До свидания!")
 			return nil
 		}
 
-		// Showing the available files
-		fmt.Println("Available files:")
+		// Показываем доступные файлы
+		fmt.Println("Доступные файлы:")
 		for _, v := range rAllFile.Units {
-			// TODO: Откуда 0 ? Size slice ?
 			if v.Id > 0 {
 				fmt.Printf("[%v] - %s \n", v.Id, v.Name)
 			}
 		}
 
-		// Select a file to delete
+		// Выбор файла для удаления
 		i, err := selectReadFile()
 		if err != nil {
-			return fmt.Errorf("wrong id file: %w", err)
+			return fmt.Errorf("неверный ID файла: %w", err)
 		}
 
-		// Request for delete
+		// Запрос на удаление
 		_, err = client.DeleteFile(int32(i))
 		if err != nil {
-			return fmt.Errorf("failed delete file: %w", err)
+			return fmt.Errorf("ошибка удаления файла: %w", err)
 		}
 
-		fmt.Println("File delete!")
+		fmt.Println("Файл удален!")
 	default:
-		fmt.Printf("Command:%s not found! \n", command)
+		fmt.Printf("Команда:%s не найдена! \n", command)
 	}
 
-	fmt.Println("Bye!")
+	fmt.Println("До свидания!")
 	return nil
 }
 
-// UTILS FOR WRITE FILE.
+// УТИЛИТЫ ДЛЯ РАБОТЫ С ФАЙЛАМИ
 
-// saveFileInDisk saving files to disk.
+// saveFileInDisk сохраняет файлы на диск
 func saveFileInDisk(fileName string, data []byte) error {
-	fmt.Println("Where do you want to save the file?")
-	fmt.Print("Enter dir path: ")
+	fmt.Println("Куда вы хотите сохранить файл?")
+	fmt.Print("Введите путь к директории: ")
 
-	// Create a reader for input from standard input (console)
 	reader := bufio.NewReader(os.Stdin)
 
-	// Consider the user's response
 	r, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf(errorFailedReadSTDIN, err)
 	}
 
-	// Trim the spaces and newline characters from the response
 	dirPath := strings.TrimSpace(r)
 	fullPath := filepath.Join(dirPath, fileName)
 
 	err = os.WriteFile(fullPath, data, defaultPermition)
 	if err != nil {
-		return fmt.Errorf("failed write data: %w", err)
+		return fmt.Errorf("ошибка записи данных: %w", err)
 	}
 
-	fmt.Printf("File save in: %s \n", fullPath)
+	fmt.Printf("Файл сохранен в: %s \n", fullPath)
 
 	return nil
 }
 
-// selectWriteData selecting a file to download.
+// selectWriteData выбор файла для загрузки
 func selectWriteData(client *client.Client) error {
-	fmt.Println("What you want send on server?")
-	fmt.Println("[1] - Text")
-	fmt.Println("[2] - File")
-	fmt.Print("Enter a number: ")
+	fmt.Println("Что вы хотите отправить на сервер?")
+	fmt.Println("[1] - Текст")
+	fmt.Println("[2] - Файл")
+	fmt.Print("Введите номер: ")
 
-	// Create a reader for input from standard input (console)
 	reader := bufio.NewReader(os.Stdin)
 
-	// Consider the user's response
 	r, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf(errorFailedReadSTDIN, err)
 	}
 
-	// Trim the spaces and newline characters from the response
 	r = strings.TrimSpace(r)
 
 	i, err := strconv.Atoi(r)
 	if err != nil {
-		return fmt.Errorf("failed parse int: %w", err)
+		return fmt.Errorf("ошибка преобразования в число: %w", err)
 	}
 
 	switch i {
 	case 1:
-		fmt.Println("What do you want to save?")
-		fmt.Println("[1] - Custom text")
-		fmt.Println("[2] - Login | Password")
-		fmt.Println("[3] - Credit card")
-		fmt.Print("Enter a number: ")
+		fmt.Println("Что вы хотите сохранить?")
+		fmt.Println("[1] - Произвольный текст")
+		fmt.Println("[2] - Логин | Пароль")
+		fmt.Println("[3] - Кредитная карта")
+		fmt.Print("Введите номер: ")
 
 		r, err := reader.ReadString('\n')
 		if err != nil {
@@ -227,10 +223,10 @@ func selectWriteData(client *client.Client) error {
 
 		i, err := strconv.Atoi(r)
 		if err != nil {
-			return fmt.Errorf("failed parse int: %w", err)
+			return fmt.Errorf("ошибка преобразования в число: %w", err)
 		}
 
-		fmt.Print("Enter name: ")
+		fmt.Print("Введите имя: ")
 
 		fileName, err := reader.ReadString('\n')
 		if err != nil {
@@ -241,13 +237,11 @@ func selectWriteData(client *client.Client) error {
 
 		switch i {
 		case 1:
-			fmt.Println("Enter text:")
-		//nolint:gomnd // This legal number
+			fmt.Println("Введите текст:")
 		case 2:
-			fmt.Println("Enter loggin and password:")
-		//nolint:gomnd // This legal number
+			fmt.Println("Введите логин и пароль:")
 		case 3:
-			fmt.Println("Enter number, name, date and CVV:")
+			fmt.Println("Введите номер, имя, дату и CVV:")
 		}
 
 		data, err := reader.ReadString('\n')
@@ -257,17 +251,15 @@ func selectWriteData(client *client.Client) error {
 
 		data = strings.TrimSpace(data)
 
-		// Send the gRPC data
+		// Отправляем данные через gRPC
 		_, err = client.WriteFile("text", fileName, data)
 		if err != nil {
-			return fmt.Errorf("write file has error: %w", err)
+			return fmt.Errorf("ошибка записи файла: %w", err)
 		}
 
-	//nolint:gomnd // This legal number
 	case 2:
-		fmt.Print("Enter the link to the file: ")
+		fmt.Print("Введите путь к файлу: ")
 
-		// Consider the user's response
 		filePath, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf(errorFailedReadSTDIN, err)
@@ -275,111 +267,102 @@ func selectWriteData(client *client.Client) error {
 
 		filePath = strings.TrimSpace(filePath)
 
-		// Get file name
+		// Получаем имя файла
 		baseName := filepath.Base(filePath)
 
-		// Send the gRPC data
+		// Отправляем данные через gRPC
 		_, err = client.WriteFile("file", baseName, filePath)
 		if err != nil {
-			return fmt.Errorf("write file has error: %w", err)
+			return fmt.Errorf("ошибка записи файла: %w", err)
 		}
 	}
 
-	fmt.Println("File write!")
+	fmt.Println("Файл записан!")
 
 	return nil
 }
 
-// UTILS FOR READ FILE.
+// УТИЛИТЫ ДЛЯ ЧТЕНИЯ ФАЙЛОВ
 
-// selectReadFile select a file to read.
+// selectReadFile выбор файла для чтения
 func selectReadFile() (int, error) {
-	fmt.Print("Select ID file: ")
+	fmt.Print("Выберите ID файла: ")
 
-	// Create a reader for input from standard input (console)
 	reader := bufio.NewReader(os.Stdin)
 
-	// Consider the user's response
 	response, err := reader.ReadString('\n')
 	if err != nil {
-		return 0, fmt.Errorf("failed read stdin: %w", err)
+		return 0, fmt.Errorf("ошибка чтения из stdin: %w", err)
 	}
 
-	// Trim the spaces and newline characters from the response
 	response = strings.TrimSpace(response)
 
-	// Converting the answer to a digit
 	i, err := strconv.Atoi(response)
 	if err != nil {
-		return 0, fmt.Errorf("failed parse int: %w", err)
+		return 0, fmt.Errorf("ошибка преобразования в число: %w", err)
 	}
 
 	return i, nil
 }
 
-// UTILS FOR REGISTER AND LOGIN.
+// УТИЛИТЫ ДЛЯ РЕГИСТРАЦИИ И ВХОДА
 
-// saveAuthToken saving the token to the .env file.
+// saveAuthToken сохранение токена в файл .env
 func saveAuthToken(token string) error {
-	fmt.Print("Do you want save token in .env? [y/N]: ")
+	fmt.Print("Хотите сохранить токен в .env? [y/N]: ")
 
-	// Create a reader for input from standard input (console)
 	reader := bufio.NewReader(os.Stdin)
 
-	// Consider the user's response
 	response, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf(errorFailedReadSTDIN, err)
 	}
 
-	// Trim the spaces and newline characters from the response
 	response = strings.TrimSpace(response)
 
-	// Check the user's response
 	if strings.ToLower(response) == "y" {
-		// Open the file .env in append or create mode, if it doesn't exist yet
 		file, err := os.OpenFile(".env", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, defaultPermition)
 		if err != nil {
-			return fmt.Errorf("failed to open .env file: %w", err)
+			return fmt.Errorf("ошибка открытия файла .env: %w", err)
 		}
 
-		// Write the string with the token in the format "JWT=your_token" to the file
 		_, err = file.WriteString(fmt.Sprintf("JWT=%s\n", token))
 		if err != nil {
-			return fmt.Errorf("failed to write token to .env file: %w", err)
+			return fmt.Errorf("ошибка записи токена в файл .env: %w", err)
 		}
 
 		err = file.Close()
 		if err != nil {
-			return fmt.Errorf("failed close file: %w", err)
+			return fmt.Errorf("ошибка закрытия файла: %w", err)
 		}
 
-		fmt.Println("Token saved in .env file.")
+		fmt.Println("Токен сохранен в файле .env.")
 	}
 
 	return nil
 }
 
+// userCredentials структура для хранения учетных данных пользователя
 type userCredentials struct {
 	login    string
 	password string
 }
 
-// getUserCredentials get a pair of username and password from the user.
+// getUserCredentials получение пары логин/пароль от пользователя
 func getUserCredentials() (userCredentials, error) {
-	fmt.Print("Enter your login: ")
+	fmt.Print("Введите ваш логин: ")
 
 	reader := bufio.NewReader(os.Stdin)
 
 	loginResp, err := reader.ReadString('\n')
 	if err != nil {
-		return userCredentials{}, fmt.Errorf("failed read login stdin: %w", err)
+		return userCredentials{}, fmt.Errorf("ошибка чтения логина из stdin: %w", err)
 	}
 
-	fmt.Print("Enter your password: ")
+	fmt.Print("Введите ваш пароль: ")
 	passwordResp, err := reader.ReadString('\n')
 	if err != nil {
-		return userCredentials{}, fmt.Errorf("failed read password stdin: %w", err)
+		return userCredentials{}, fmt.Errorf("ошибка чтения пароля из stdin: %w", err)
 	}
 
 	return userCredentials{
