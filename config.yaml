@@ -1,0 +1,3 @@
+---
+hostport: "localhost:34555"
+dataSourceName: "postgres://gophkeeper-user:12345@127.0.0.1:5431/gophkeeper-db" 
